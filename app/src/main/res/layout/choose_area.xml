@@ -9,7 +9,7 @@
     <RelativeLayout
         android:layout_height="?attr/actionBarSize"
         android:layout_width="match_parent"
-        android:background="?attr/colorPrimary">
+        android:background="@color/colorPrimary">
     <TextView
         android:id="@+id/title_text"
         android:layout_height="wrap_content"

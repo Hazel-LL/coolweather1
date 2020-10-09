@@ -3,6 +3,7 @@ package com.example.coolweather;
 import android.app.ProgressDialog;
 import android.content.Intent;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -34,6 +35,10 @@ import okhttp3.Response;
 
 
 
+/*
+* 创建一个AreaFragment继承自Fragment，
+* 在其中编写遍历全国的省市县数据，通过从数据库获取和网络获取两种方式来加载全国省市县数据
+* */
 public class ChooseAreaFragment extends Fragment {
     public static final int LEVEL_PROVINCE = 0;
     public static final int LEVEL_CITY = 1;
@@ -49,47 +54,40 @@ public class ChooseAreaFragment extends Fragment {
     private List<Province> provinceList;
     private List<City> cityList;
     private List<County> countyList;
-    private Province selectedProvince;
-    private City selectedCity;
-    private int currentLevel;
+    private Province selectedProvince;//被选中的省份
+    private City selectedCity;//被选中的城市
+    private int currentLevel;//当前被选中的级别
 
+    /*获取控件实例id*/
     @Nullable
     @Override
-    public View onCreateView(LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
+    public View onCreateView(@Nullable LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.choose_area, container, false);
-        titleText = (TextView) view.findViewById(R.id.title_text);
-        backButton = (Button) view.findViewById(R.id.back_button);
-        listView = (ListView) view.findViewById(R.id.list_view);
+        titleText = (TextView) view.findViewById(R.id.title_text);//获取标题栏文本id
+        backButton = (Button) view.findViewById(R.id.back_button);//获取标题栏id
+        listView = (ListView) view.findViewById(R.id.list_view);//获取Item列表id
+        //获取ArrayAdapter对象
         adapter = new ArrayAdapter<>(getContext(), android.R.layout.simple_list_item_1, dataList);
-        listView.setAdapter(adapter);
-        return view;
+        listView.setAdapter(adapter);//设置并初始化适配器
+        return view;//将视图返回
     }
 
+    /*点击事件集合*/
     @Override
     public void onActivityCreated(@Nullable Bundle savedInstanceState) {
         super.onActivityCreated(savedInstanceState);
+        //列表任意一栏被点击
         listView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             @Override
             public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-                if (currentLevel == LEVEL_PROVINCE) {
-                    selectedProvince = provinceList.get(position);
-                    queryCities();
-                } else if (currentLevel == LEVEL_CITY) {
+                //Log.d("ChooseAreaFragment","列表被点了的...");
+                if (currentLevel == LEVEL_PROVINCE){   //当前选中的级别为省份时
+                    selectedProvince = provinceList.get(position);  //当前点击为选中状态
+                    queryCities();//查询市的方法
+                }
+                else if (currentLevel == LEVEL_CITY){
                     selectedCity = cityList.get(position);
                     queryCounties();
-                } else if (currentLevel == LEVEL_COUNTY) {
-                    String weatherId = countyList.get(position).getWeatherId();
-                    if (getActivity() instanceof MainActivity) {
-                        Intent intent = new Intent(getActivity(), WeatherActivity.class);
-                        intent.putExtra("weather_id", weatherId);
-                        startActivity(intent);
-                        getActivity().finish();
-                    } else if (getActivity() instanceof WeatherActivity) {
-                        WeatherActivity activity = (WeatherActivity) getActivity();
-                        activity.drawerLayout.closeDrawers();
-                        activity.swipeRefresh.setRefreshing(true);
-                        activity.requestWeather(weatherId);
-                    }
                 }
             }
         });
@@ -105,6 +103,8 @@ public class ChooseAreaFragment extends Fragment {
         });
         queryProvinces();
     }
+
+    //查询全国所有的省，优先从数据库查询，如果没有查询到再去服务器上查询
     private void queryProvinces() {
         titleText.setText("中国");
         backButton.setVisibility(View.GONE);
@@ -122,25 +122,28 @@ public class ChooseAreaFragment extends Fragment {
             queryFromServer(address, "province");
         }
     }
+    //查询选中省内所有的市，优先从数据库查询，如果没有查询到再去服务器上查询
     private void queryCities() {
-        titleText.setText(selectedProvince.getProvinceName());
-        backButton.setVisibility(View.VISIBLE);
+        titleText.setText(selectedProvince.getProvinceName());//设置市的标题内容
+        backButton.setVisibility(View.VISIBLE);//设置返回按钮可见
+        //查询被选中的省份城市的市区
         cityList = DataSupport.where("provinceid = ?", String.valueOf(
                 selectedProvince.getId())).find(City.class);
-        if (cityList.size() > 0) {
+        if (cityList.size() > 0) {//如果省列表不为空，则...
             dataList.clear();
-            for (City city : cityList) {
-                dataList.add(city.getCityName());
+            for (City city : cityList) {//遍历每一份省的市级城市
+                dataList.add(city.getCityName());//添加到数据列表中
             }
-            adapter.notifyDataSetChanged();
+            adapter.notifyDataSetChanged();//通知适配器数据更新了
             listView.setSelection(0);
             currentLevel = LEVEL_CITY;
         } else {
-            int provinceCode = selectedProvince.getProvinceCode();
-            String address = "http://guolin.tech/api/china/" + provinceCode;
-            queryFromServer(address, "city");
+            int provinceCode = selectedProvince.getProvinceCode();//获取被选取省级代码
+            String address = "http://guolin.tech/api/china/" + provinceCode;//获取被选取地区的网络地址
+            queryFromServer(address, "city"); // 在网络中查询
         }
     }
+    //查询选中市内所有的县，优先从数据库查询，如果没有查询到再去服务器上查询
     private void queryCounties() {
         titleText.setText(selectedCity.getCityName());
         backButton.setVisibility(View.VISIBLE);
@@ -162,11 +165,17 @@ public class ChooseAreaFragment extends Fragment {
             queryFromServer(address, "county");
         }
     }
+
+    //根据传入的地址和类型从服务器查询省市县数据
     private void queryFromServer(String address, final String type) {
         showProgressDialog();
+        //发送一条网络请求
         HttpUtil.sendOkHttpRequest(address, new Callback() {
+
+            //请求加载失败
             @Override
             public void onFailure(Call call, IOException e) {
+                //通过runOnUiThread方法回到主线程逻辑
                 getActivity().runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
@@ -205,9 +214,17 @@ public class ChooseAreaFragment extends Fragment {
                         }
                     });
                 }
+                if ("city".equals(type)){
+                    result = Utility.handleProvinceResponse(responseText);
+                }
+                if ("county".equals(type)){
+                    result = Utility.handleProvinceResponse(responseText);
+                }
             }
         });
     }
+
+    //显示进度对话框
     private void showProgressDialog() {
         if (progressDialog == null) {
             progressDialog = new ProgressDialog(getActivity());
@@ -216,6 +233,7 @@ public class ChooseAreaFragment extends Fragment {
         }
         progressDialog.show();
     }
+    //关闭进度对话框
     private void closeProgressDialog() {
         if (progressDialog != null) {
             progressDialog.dismiss();
