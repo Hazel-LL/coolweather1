@@ -59,9 +59,8 @@ public class ChooseAreaFragment extends Fragment {
     private int currentLevel;//当前被选中的级别
 
     /*获取控件实例id*/
-    @Nullable
     @Override
-    public View onCreateView(@Nullable LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
+    public View onCreateView( LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.choose_area, container, false);
         titleText = (TextView) view.findViewById(R.id.title_text);//获取标题栏文本id
         backButton = (Button) view.findViewById(R.id.back_button);//获取标题栏id
@@ -74,13 +73,12 @@ public class ChooseAreaFragment extends Fragment {
 
     /*点击事件集合*/
     @Override
-    public void onActivityCreated(@Nullable Bundle savedInstanceState) {
+    public void onActivityCreated(Bundle savedInstanceState) {
         super.onActivityCreated(savedInstanceState);
         //列表任意一栏被点击
         listView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             @Override
             public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-                //Log.d("ChooseAreaFragment","列表被点了的...");
                 if (currentLevel == LEVEL_PROVINCE){   //当前选中的级别为省份时
                     selectedProvince = provinceList.get(position);  //当前点击为选中状态
                     queryCities();//查询市的方法
@@ -88,16 +86,20 @@ public class ChooseAreaFragment extends Fragment {
                 else if (currentLevel == LEVEL_CITY){
                     selectedCity = cityList.get(position);
                     queryCounties();
-                }
-            }
-        });
-        backButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                if (currentLevel == LEVEL_COUNTY) {
-                    queryCities();
-                } else if (currentLevel == LEVEL_CITY) {
-                    queryProvinces();
+                    //实现地区天气界面
+                }else if (currentLevel == LEVEL_COUNTY){
+                    String weatherId = countyList.get(position).getWeatherId();
+                    if (getActivity() instanceof MainActivity) {
+                        Intent intent = new Intent(getActivity(), WeatherActivity.class);
+                        intent.putExtra("weather_id", weatherId);
+                        startActivity(intent);
+                        getActivity().finish();
+                    }else if (getActivity() instanceof WeatherActivity){
+                        WeatherActivity activity = (WeatherActivity)getActivity();
+                        activity.drawerLayout.closeDrawers();
+                        activity.swipeRefresh.setRefreshing(true);
+                        activity.requestWeather(weatherId);
+                    }
                 }
             }
         });
@@ -160,7 +162,7 @@ public class ChooseAreaFragment extends Fragment {
         } else {
             int provinceCode = selectedProvince.getProvinceCode();
             int cityCode = selectedCity.getCityCode();
-            String address = "http://guolin.tech/api/china/" + provinceCode + "/" +
+            String address = "http://guolin.tech/api/bing_pic" + provinceCode + "/" +
                     cityCode;
             queryFromServer(address, "county");
         }
@@ -171,21 +173,6 @@ public class ChooseAreaFragment extends Fragment {
         showProgressDialog();
         //发送一条网络请求
         HttpUtil.sendOkHttpRequest(address, new Callback() {
-
-            //请求加载失败
-            @Override
-            public void onFailure(Call call, IOException e) {
-                //通过runOnUiThread方法回到主线程逻辑
-                getActivity().runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        closeProgressDialog();
-                        Toast.makeText(getContext(), "加载失败",
-                                Toast.LENGTH_SHORT).show();
-                    }
-                });
-            }
-
             @Override
             public void onResponse(Call call, Response response) throws IOException {
                 String responseText = response.body().string();
@@ -214,12 +201,19 @@ public class ChooseAreaFragment extends Fragment {
                         }
                     });
                 }
-                if ("city".equals(type)){
-                    result = Utility.handleProvinceResponse(responseText);
-                }
-                if ("county".equals(type)){
-                    result = Utility.handleProvinceResponse(responseText);
-                }
+            }
+            //请求加载失败
+            @Override
+            public void onFailure(Call call, IOException e) {
+                //通过runOnUiThread方法回到主线程逻辑
+                getActivity().runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        closeProgressDialog();
+                        Toast.makeText(getContext(), "加载失败",
+                                Toast.LENGTH_SHORT).show();
+                    }
+                });
             }
         });
     }
