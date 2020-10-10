@@ -49,6 +49,7 @@ public class WeatherActivity extends AppCompatActivity {
     public SwipeRefreshLayout swipeRefresh;
     public DrawerLayout drawerLayout;
     private Button navButton;
+    private String mWeatherId;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -87,18 +88,18 @@ public class WeatherActivity extends AppCompatActivity {
         if (weatherString != null) {
             //有缓存时直接解析天气数据
             Weather weather = Utility.handleWeatherResponse(weatherString);
-            weatherId = weather.basic.weatherId;
+            mWeatherId = weather.basic.weatherId;
             showWeatherInfo(weather);
         } else {
             //无缓存时去服务器查询天气
-            weatherId = getIntent().getStringExtra("weather_id");
+            mWeatherId = getIntent().getStringExtra("weather_id");
             weatherLayout.setVisibility(View.INVISIBLE);
-            requestWeather(weatherId);
+            requestWeather(mWeatherId);
         }
         swipeRefresh.setOnRefreshListener(new SwipeRefreshLayout.OnRefreshListener() {
             @Override
             public void onRefresh() {
-                requestWeather(weatherId);
+                requestWeather(mWeatherId);
             }
         });
         //切换城市
@@ -118,17 +119,15 @@ public class WeatherActivity extends AppCompatActivity {
     }
 
 
-
-
-
     //根据天气id请求城市天气信息
     public void requestWeather(final String weatherId) {
-        String weatherUrl = "http://guolin.tech/api/weather?cityid=" + weatherId + "&key=bc0418b57b2d4918819d3974ac1285d9";
+        String weatherUrl = "http://guolin.tech/api/weather?cityid=" + weatherId + "&key=6afafb982757458facd76ad911533e95";
         HttpUtil.sendOkHttpRequest(weatherUrl, new Callback() {
             @Override
             public void onResponse(Call call, Response response) throws IOException {
-                final String responseText = response.body().string();
+                final String responseText = response.body().string();//得到服务器返回的具体内容
                 final Weather weather = Utility.handleWeatherResponse(responseText);
+                //线程切换
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
@@ -136,7 +135,7 @@ public class WeatherActivity extends AppCompatActivity {
                             SharedPreferences.Editor editor = PreferenceManager.getDefaultSharedPreferences(WeatherActivity.this).edit();
                             editor.putString("weather", responseText);
                             editor.apply();
-                           // mWeatherId = weather.basic.weatherId;
+                           mWeatherId = weather.basic.weatherId;
                             showWeatherInfo(weather);
 
                         } else {
@@ -149,6 +148,7 @@ public class WeatherActivity extends AppCompatActivity {
 
             @Override
             public void onFailure(Call call, IOException e) {
+                //在这里对异常情况进行处理
                 e.printStackTrace();
                 runOnUiThread(new Runnable() {
                     @Override
@@ -184,6 +184,24 @@ public class WeatherActivity extends AppCompatActivity {
                 e.printStackTrace();
             }
         });
+    }
+
+    boolean isAlreadyPress = false;
+    long pressTime;
+
+    @Override
+    public void onBackPressed() {
+        if (drawerLayout != null && drawerLayout.isDrawerOpen(GravityCompat.START)) {
+            drawerLayout.closeDrawers();
+        } else {
+            if (isAlreadyPress && System.currentTimeMillis() - pressTime < 3000) {
+                finish();
+            } else {
+                Toast.makeText(WeatherActivity.this, "再按一下退出", Toast.LENGTH_SHORT).show();
+                pressTime = System.currentTimeMillis();
+                isAlreadyPress = true;
+            }
+        }
     }
 
     //处理并展示weather实体类中的数据
@@ -224,4 +242,46 @@ public class WeatherActivity extends AppCompatActivity {
         Intent intent = new Intent(this,AutoUpdateService.class);
         startService(intent);
     }
+
+    void setAqiAndPm25(Weather weather) {
+        if (weather.aqi != null) {
+            int aqi = 0, pm25 = 0;
+            try {
+                aqi = Integer.parseInt(weather.aqi.city.aqi);
+                pm25 = Integer.parseInt(weather.aqi.city.pm25);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+            aqiText.setText(weather.aqi.city.aqi);
+            pm25Text.setText(weather.aqi.city.pm25);
+            aqiText.setTextSize(40);
+            pm25Text.setTextSize(40);
+
+            if (aqi == 0) aqiText.setTextColor(Color.WHITE);
+            else if (aqi < 50) aqiText.setTextColor(getResources().getColor(R.color.a50));
+            else if (aqi < 100) aqiText.setTextColor(getResources().getColor(R.color.a100));
+            else if (aqi < 150) aqiText.setTextColor(getResources().getColor(R.color.a150));
+            else if (aqi < 200) aqiText.setTextColor(getResources().getColor(R.color.a200));
+            else if (aqi < 300) aqiText.setTextColor(getResources().getColor(R.color.a300));
+            else if (aqi > 300) aqiText.setTextColor(getResources().getColor(R.color.a300up));
+
+            if (pm25 == 0) pm25Text.setTextColor(Color.WHITE);
+            else if (pm25 < 35) pm25Text.setTextColor(getResources().getColor(R.color.a50));
+            else if (pm25 < 75) pm25Text.setTextColor(getResources().getColor(R.color.a100));
+            else if (pm25 < 115) pm25Text.setTextColor(getResources().getColor(R.color.a150));
+            else if (pm25 < 150) pm25Text.setTextColor(getResources().getColor(R.color.a200));
+            else if (pm25 < 250) pm25Text.setTextColor(getResources().getColor(R.color.a300));
+            else if (pm25 > 250) pm25Text.setTextColor(getResources().getColor(R.color.a300up));
+        } else {
+            aqiText.setTextColor(Color.WHITE);
+            pm25Text.setTextColor(Color.WHITE);
+            aqiText.setText("暂无数据");
+            pm25Text.setText("暂无数据");
+            aqiText.setTextSize(25);
+            pm25Text.setTextSize(25);
+            aqiText.setSingleLine();
+            pm25Text.setSingleLine();
+        }
+    }
 }
+

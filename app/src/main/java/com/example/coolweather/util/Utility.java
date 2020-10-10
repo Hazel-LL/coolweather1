@@ -87,7 +87,9 @@ public class Utility {
      */
     public static Weather handleWeatherResponse(String response) {
         try {
+            // 将整个json实例化保存在jsonObject中
             JSONObject jsonObject = new JSONObject(response);
+
             JSONArray jsonArray = jsonObject.getJSONArray("HeWeather");
             String weatherContent = jsonArray.getJSONObject(0).toString();
             return new Gson().fromJson(weatherContent, Weather.class);
